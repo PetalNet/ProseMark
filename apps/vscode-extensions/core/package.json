@@ -36,7 +36,12 @@
           }
         ]
       }
-    ]
+    ],
+    "configurationDefaults": {
+      "workbench.editorAssociations": {
+        "{git,gitlens,gitlens-virtual,vscode-local-history,pr,review}:/**/*.md": "default"
+      }
+    }
   },
   "extensionPack": [
     "streetsidesoftware.code-spell-checker",
