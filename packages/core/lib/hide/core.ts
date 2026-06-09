@@ -16,6 +16,15 @@ const hideTheme = EditorView.theme({
   '.cm-transparent-token': {
     opacity: 0,
   },
+  // Heading tags are block-level by default; CodeMirror lays out inline content
+  // within a line, so render them inline-block to keep them on the line.
+  '.cm-line :is(h1, h2, h3, h4, h5, h6)': {
+    display: 'inline-block',
+    margin: 0,
+    fontSize: 'inherit',
+    fontWeight: 'inherit',
+    lineHeight: 'inherit',
+  },
 });
 
 export const hideInlineDecoration = Decoration.mark({
@@ -67,6 +76,18 @@ const buildDecorations = (state: EditorState) => {
 
         if (spec.nodeDecoration) {
           decorations.push(spec.nodeDecoration.range(node.from, node.to));
+        }
+
+        // Semantic decorations that should apply regardless of whether the
+        // selection is inside the node (e.g. heading tags, which must persist
+        // while the heading is being edited).
+        if (spec.alwaysDecoration) {
+          const res = spec.alwaysDecoration(state, node);
+          if (res instanceof Array) {
+            decorations.push(...res);
+          } else if (res) {
+            decorations.push(res);
+          }
         }
 
         if (selectionTouchesNodeRange) {
@@ -133,6 +154,15 @@ export const hideExtension = StateField.define<DecorationSet>({
 export interface HidableNodeSpec {
   nodeName: string | string[] | ((nodeName: string) => boolean);
   nodeDecoration?: Decoration;
+  /**
+   * Decoration(s) applied to the node regardless of selection state, with a
+   * custom range. Unlike `nodeDecoration` (which always spans the whole node),
+   * this lets a spec target a sub-range (e.g. just the heading text).
+   */
+  alwaysDecoration?: (
+    state: EditorState,
+    node: SyntaxNodeRef,
+  ) => Range<Decoration> | Range<Decoration>[] | undefined;
   subNodeNameToHide?: string | string[];
   onHide?: (
     state: EditorState,

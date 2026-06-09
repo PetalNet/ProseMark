@@ -14,8 +14,24 @@ const renderedLinkDecoration = Decoration.mark({
   class: 'cm-rendered-link',
 });
 const inlineCodeDecoration = Decoration.mark({
+  tagName: 'code',
   class: 'cm-inline-code',
 });
+
+// Semantic inline tags, so consumers can target strong/em/etc (e.g. with
+// Tailwind Typography). Marks wrap the whole node; the syntax marks inside are
+// hidden separately via `subNodeNameToHide`.
+const strongDecoration = Decoration.mark({ tagName: 'strong' });
+const emphasisDecoration = Decoration.mark({ tagName: 'em' });
+// GFM renders `~~strikethrough~~` as <del> (matches GitHub + Tailwind
+// Typography's `del` styling).
+const strikethroughDecoration = Decoration.mark({ tagName: 'del' });
+
+// Heading tags (h1..h6). These persist regardless of selection so the semantic
+// element is present even while editing the heading.
+const atxHeadingDecorations = Array.from({ length: 6 }, (_, i) =>
+  Decoration.mark({ tagName: `h${(i + 1).toString()}` }),
+);
 
 const defaultHidableSpecs: HidableNodeSpec[] = [
   {
@@ -28,14 +44,42 @@ const defaultHidableSpecs: HidableNodeSpec[] = [
         Math.min(headerMark.to + 1, node.to),
       );
     },
+    alwaysDecoration: (_state, node) => {
+      // Mark the heading text (after the `#` mark) with the matching tag.
+      // Range is text-only so the hidden marker isn't wrapped in the heading.
+      const level = Number(node.type.name.slice('ATXHeading'.length));
+      const deco = atxHeadingDecorations[level - 1];
+      if (!deco) return undefined;
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      const headerMark = node.node.firstChild!;
+      const from = Math.min(headerMark.to + 1, node.to);
+      if (from >= node.to) return undefined;
+      return deco.range(from, node.to);
+    },
   },
   {
     nodeName: (name) => name.startsWith('SetextHeading'),
     subNodeNameToHide: 'HeaderMark',
     block: true,
+    alwaysDecoration: (state, node) => {
+      // A mark decoration can't span the underline line, so tag just the
+      // heading text on the first line; the underline is left as-is.
+      const level = Number(node.type.name.slice('SetextHeading'.length));
+      const deco = atxHeadingDecorations[level - 1];
+      if (!deco) return undefined;
+      const to = state.doc.lineAt(node.from).to;
+      if (node.from >= to) return undefined;
+      return deco.range(node.from, to);
+    },
   },
   {
-    nodeName: ['StrongEmphasis', 'Emphasis'],
+    nodeName: 'StrongEmphasis',
+    nodeDecoration: strongDecoration,
+    subNodeNameToHide: 'EmphasisMark',
+  },
+  {
+    nodeName: 'Emphasis',
+    nodeDecoration: emphasisDecoration,
     subNodeNameToHide: 'EmphasisMark',
   },
   {
@@ -52,6 +96,7 @@ const defaultHidableSpecs: HidableNodeSpec[] = [
   },
   {
     nodeName: 'Strikethrough',
+    nodeDecoration: strikethroughDecoration,
     subNodeNameToHide: 'StrikethroughMark',
   },
   {
